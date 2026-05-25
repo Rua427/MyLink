@@ -1,4 +1,5 @@
 import { dummyLinks } from "@/data/links"
+import { dummyUser } from "@/data/user"
 import { Card, CardContent } from "@/components/ui/card"
 import Image from "next/image"
 
@@ -17,17 +18,17 @@ export default function Page() {
           {/* Profile Avatar */}
           <div className="relative mb-5 h-24 w-24 overflow-hidden rounded-full ring-4 ring-background/50 shadow-xl">
             <img
-              src="https://api.dicebear.com/9.x/notionists/svg?seed=Jane"
-              alt="Profile Avatar"
+              src={dummyUser.photoURL}
+              alt={`${dummyUser.displayName} Avatar`}
               className="h-full w-full object-cover bg-muted/30"
             />
           </div>
           
           <h1 className="bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-4xl font-extrabold tracking-tight text-transparent sm:text-5xl cursor-pointer hover:opacity-80 transition-opacity">
-            Jane Doe
+            {dummyUser.displayName}
           </h1>
           <p className="mt-4 text-base font-medium text-muted-foreground sm:text-lg cursor-pointer hover:text-foreground transition-colors">
-            프론트엔드 개발자입니다.
+            {dummyUser.bio}
           </p>
         </div>
 
