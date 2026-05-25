@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { dummyLinks, Link } from "@/data/links"
+import { useState, useEffect } from "react"
+import { Link } from "@/data/links"
 import { dummyUser } from "@/data/user"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -17,10 +17,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import Image from "next/image"
-import { Plus } from "lucide-react"
+import { Plus, Loader2 } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
+import { collection, getDocs, addDoc, query, orderBy } from "firebase/firestore"
+import { db } from "@/lib/firebase"
 
 const linkSchema = z.object({
   title: z.string().trim().min(1, { message: "제목을 입력해주세요." }),
@@ -42,14 +44,35 @@ const linkSchema = z.object({
 type LinkFormValues = z.infer<typeof linkSchema>
 
 export default function Page() {
-  const [links, setLinks] = useState<Link[]>(dummyLinks)
+  const [links, setLinks] = useState<Link[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchLinks = async () => {
+      try {
+        const q = query(collection(db, "users", "anonymous", "links"), orderBy("createdAt", "desc"))
+        const querySnapshot = await getDocs(q)
+        const fetchedLinks: Link[] = []
+        querySnapshot.forEach((doc) => {
+          fetchedLinks.push({ id: doc.id, ...doc.data() } as Link)
+        })
+        setLinks(fetchedLinks)
+      } catch (error) {
+        console.error("Failed to fetch links:", error)
+        alert("링크를 불러오는데 실패했습니다.")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchLinks()
+  }, [])
 
   const {
     register,
     handleSubmit,
     reset,
-    formState: { errors }
+    formState: { errors, isSubmitting }
   } = useForm<LinkFormValues>({
     resolver: zodResolver(linkSchema),
     defaultValues: {
@@ -58,19 +81,32 @@ export default function Page() {
     }
   })
 
-  const onSubmit = (data: LinkFormValues) => {
-    const newLink: Link = {
-      id: `link-${Date.now()}`,
-      title: data.title,
-      url: data.url,
-      clickCount: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }
+  const onSubmit = async (data: LinkFormValues) => {
+    try {
+      const now = new Date().toISOString()
+      const newLinkData = {
+        title: data.title,
+        url: data.url,
+        clickCount: 0,
+        createdAt: now,
+        updatedAt: now,
+      }
 
-    setLinks([newLink, ...links])
-    reset()
-    setIsDialogOpen(false)
+      const docRef = await addDoc(collection(db, "users", "anonymous", "links"), newLinkData)
+      
+      const newLink: Link = {
+        id: docRef.id,
+        ...newLinkData
+      }
+
+      setLinks([newLink, ...links])
+      reset()
+      setIsDialogOpen(false)
+      alert("링크가 성공적으로 추가되었습니다.")
+    } catch (error) {
+      console.error("Failed to add link:", error)
+      alert("링크 추가에 실패했습니다. 다시 시도해주세요.")
+    }
   }
 
   const handleOpenChange = (open: boolean) => {
@@ -106,36 +142,46 @@ export default function Page() {
 
         {/* Link List */}
         <div className="flex flex-col gap-4 mt-4">
-          {links.map((link) => (
-            <a
-              key={link.id}
-              href={link.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group block w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-xl"
-            >
-              <Card className="w-full overflow-hidden border-muted/30 bg-background/50 backdrop-blur-xl transition-all duration-300 ease-out hover:-translate-y-1 hover:border-primary/30 hover:bg-background/80 hover:shadow-xl hover:shadow-primary/5 dark:bg-muted/10 dark:hover:bg-muted/20">
-                <CardContent className="relative flex min-h-[72px] items-center p-4">
-                  {/* Favicon */}
-                  <div className="absolute left-4 flex h-11 w-11 items-center justify-center rounded-full bg-background/60 shadow-sm transition-transform duration-300 group-hover:scale-110 group-hover:bg-background dark:bg-background/20 dark:group-hover:bg-background/40">
-                    <Image
-                      src={`https://www.google.com/s2/favicons?domain=${link.url}&sz=128`}
-                      alt={`${link.title} 파비콘`}
-                      width={22}
-                      height={22}
-                      className="h-5 w-5 object-contain"
-                    />
-                  </div>
-                  {/* Title */}
-                  <div className="flex-1 px-14 text-center">
-                    <span className="text-[15px] font-semibold tracking-wide text-foreground/90 transition-colors group-hover:text-foreground">
-                      {link.title}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            </a>
-          ))}
+          {isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : links.length === 0 ? (
+            <div className="py-8 text-center text-muted-foreground text-sm">
+              등록된 링크가 없습니다.
+            </div>
+          ) : (
+            links.map((link) => (
+              <a
+                key={link.id}
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group block w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-xl"
+              >
+                <Card className="w-full overflow-hidden border-muted/30 bg-background/50 backdrop-blur-xl transition-all duration-300 ease-out hover:-translate-y-1 hover:border-primary/30 hover:bg-background/80 hover:shadow-xl hover:shadow-primary/5 dark:bg-muted/10 dark:hover:bg-muted/20">
+                  <CardContent className="relative flex min-h-[72px] items-center p-4">
+                    {/* Favicon */}
+                    <div className="absolute left-4 flex h-11 w-11 items-center justify-center rounded-full bg-background/60 shadow-sm transition-transform duration-300 group-hover:scale-110 group-hover:bg-background dark:bg-background/20 dark:group-hover:bg-background/40">
+                      <Image
+                        src={`https://www.google.com/s2/favicons?domain=${link.url}&sz=128`}
+                        alt={`${link.title} 파비콘`}
+                        width={22}
+                        height={22}
+                        className="h-5 w-5 object-contain"
+                      />
+                    </div>
+                    {/* Title */}
+                    <div className="flex-1 px-14 text-center">
+                      <span className="text-[15px] font-semibold tracking-wide text-foreground/90 transition-colors group-hover:text-foreground">
+                        {link.title}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </a>
+            ))
+          )}
 
           {/* Add Link Dialog */}
           <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
@@ -178,7 +224,8 @@ export default function Page() {
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button type="submit">
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     추가하기
                   </Button>
                 </DialogFooter>
