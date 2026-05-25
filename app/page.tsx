@@ -18,44 +18,71 @@ import {
 } from "@/components/ui/dialog"
 import Image from "next/image"
 import { Plus } from "lucide-react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import * as z from "zod"
+
+const linkSchema = z.object({
+  title: z.string().trim().min(1, { message: "제목을 입력해주세요." }),
+  url: z.string().trim().min(1, { message: "URL을 입력해주세요." }).transform(val => {
+    if (!/^https?:\/\//i.test(val)) {
+      return `https://${val}`
+    }
+    return val
+  }).refine((val) => {
+    try {
+      new URL(val)
+      return true
+    } catch {
+      return false
+    }
+  }, { message: "유효한 URL 형식이 아닙니다." })
+})
+
+type LinkFormValues = z.infer<typeof linkSchema>
 
 export default function Page() {
   const [links, setLinks] = useState<Link[]>(dummyLinks)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [newLinkTitle, setNewLinkTitle] = useState("")
-  const [newLinkUrl, setNewLinkUrl] = useState("")
 
-  const handleAddLink = () => {
-    if (!newLinkTitle || !newLinkUrl) return
-
-    // Ensure url has https:// if no protocol is given
-    let finalUrl = newLinkUrl
-    if (!/^https?:\/\//i.test(finalUrl)) {
-      finalUrl = `https://${finalUrl}`
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors }
+  } = useForm<LinkFormValues>({
+    resolver: zodResolver(linkSchema),
+    defaultValues: {
+      title: "",
+      url: "",
     }
+  })
 
+  const onSubmit = (data: LinkFormValues) => {
     const newLink: Link = {
       id: `link-${Date.now()}`,
-      title: newLinkTitle,
-      url: finalUrl,
+      title: data.title,
+      url: data.url,
       clickCount: 0,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
 
     setLinks([newLink, ...links])
-    setNewLinkTitle("")
-    setNewLinkUrl("")
+    reset()
     setIsDialogOpen(false)
+  }
+
+  const handleOpenChange = (open: boolean) => {
+    setIsDialogOpen(open)
+    if (!open) {
+      reset()
+    }
   }
 
   return (
     <div className="relative flex min-h-svh flex-col items-center p-6 sm:p-12 overflow-hidden selection:bg-primary selection:text-primary-foreground">
-      {/* Background gradients */}
-      <div className="fixed inset-0 -z-10 h-full w-full bg-background dark:bg-slate-950">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(120,119,198,0.3),rgba(255,255,255,0))] dark:bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(120,119,198,0.15),rgba(255,255,255,0))]"></div>
-        <div className="absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:14px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]"></div>
-      </div>
+
 
       <div className="z-10 flex w-full max-w-md flex-col gap-8 mt-12">
         {/* Profile Header */}
@@ -111,11 +138,10 @@ export default function Page() {
           ))}
 
           {/* Add Link Dialog */}
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
               <Button
-                variant="outline"
-                className="mt-2 w-full h-14 border-dashed border-2 border-muted-foreground/30 bg-transparent text-muted-foreground hover:bg-muted/30 hover:text-foreground hover:border-foreground/30 transition-all rounded-xl"
+                className="mt-2 w-full h-14 bg-primary text-primary-foreground hover:bg-primary/90 transition-all rounded-xl font-semibold shadow-md hover:shadow-lg"
               >
                 <Plus className="mr-2 h-5 w-5" />
                 새 링크 추가
@@ -128,31 +154,35 @@ export default function Page() {
                   추가할 링크의 제목과 URL을 입력해주세요.
                 </DialogDescription>
               </DialogHeader>
-              <div className="flex flex-col gap-4 py-4">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="title">제목</Label>
-                  <Input
-                    id="title"
-                    placeholder="예: 인스타그램"
-                    value={newLinkTitle}
-                    onChange={(e) => setNewLinkTitle(e.target.value)}
-                  />
+              <form onSubmit={handleSubmit(onSubmit)}>
+                <div className="flex flex-col gap-4 py-4">
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="title" className={errors.title ? "text-destructive" : ""}>제목</Label>
+                    <Input
+                      id="title"
+                      placeholder="예: 인스타그램"
+                      {...register("title")}
+                      className={errors.title ? "border-destructive focus-visible:ring-destructive" : ""}
+                    />
+                    {errors.title && <p className="text-sm font-medium text-destructive">{errors.title.message}</p>}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="url" className={errors.url ? "text-destructive" : ""}>URL</Label>
+                    <Input
+                      id="url"
+                      placeholder="예: https://instagram.com/example"
+                      {...register("url")}
+                      className={errors.url ? "border-destructive focus-visible:ring-destructive" : ""}
+                    />
+                    {errors.url && <p className="text-sm font-medium text-destructive">{errors.url.message}</p>}
+                  </div>
                 </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="url">URL</Label>
-                  <Input
-                    id="url"
-                    placeholder="예: https://instagram.com/example"
-                    value={newLinkUrl}
-                    onChange={(e) => setNewLinkUrl(e.target.value)}
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button type="button" onClick={handleAddLink} disabled={!newLinkTitle || !newLinkUrl}>
-                  추가하기
-                </Button>
-              </DialogFooter>
+                <DialogFooter>
+                  <Button type="submit">
+                    추가하기
+                  </Button>
+                </DialogFooter>
+              </form>
             </DialogContent>
           </Dialog>
         </div>
