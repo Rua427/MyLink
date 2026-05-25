@@ -1,9 +1,54 @@
-import { dummyLinks } from "@/data/links"
+"use client"
+
+import { useState } from "react"
+import { dummyLinks, Link } from "@/data/links"
 import { dummyUser } from "@/data/user"
 import { Card, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import Image from "next/image"
+import { Plus } from "lucide-react"
 
 export default function Page() {
+  const [links, setLinks] = useState<Link[]>(dummyLinks)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [newLinkTitle, setNewLinkTitle] = useState("")
+  const [newLinkUrl, setNewLinkUrl] = useState("")
+
+  const handleAddLink = () => {
+    if (!newLinkTitle || !newLinkUrl) return
+
+    // Ensure url has https:// if no protocol is given
+    let finalUrl = newLinkUrl
+    if (!/^https?:\/\//i.test(finalUrl)) {
+      finalUrl = `https://${finalUrl}`
+    }
+
+    const newLink: Link = {
+      id: `link-${Date.now()}`,
+      title: newLinkTitle,
+      url: finalUrl,
+      clickCount: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+
+    setLinks([newLink, ...links])
+    setNewLinkTitle("")
+    setNewLinkUrl("")
+    setIsDialogOpen(false)
+  }
+
   return (
     <div className="relative flex min-h-svh flex-col items-center p-6 sm:p-12 overflow-hidden selection:bg-primary selection:text-primary-foreground">
       {/* Background gradients */}
@@ -34,7 +79,7 @@ export default function Page() {
 
         {/* Link List */}
         <div className="flex flex-col gap-4 mt-4">
-          {dummyLinks.map((link) => (
+          {links.map((link) => (
             <a
               key={link.id}
               href={link.url}
@@ -64,6 +109,52 @@ export default function Page() {
               </Card>
             </a>
           ))}
+
+          {/* Add Link Dialog */}
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button
+                variant="outline"
+                className="mt-2 w-full h-14 border-dashed border-2 border-muted-foreground/30 bg-transparent text-muted-foreground hover:bg-muted/30 hover:text-foreground hover:border-foreground/30 transition-all rounded-xl"
+              >
+                <Plus className="mr-2 h-5 w-5" />
+                새 링크 추가
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>새 링크 추가</DialogTitle>
+                <DialogDescription>
+                  추가할 링크의 제목과 URL을 입력해주세요.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col gap-4 py-4">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="title">제목</Label>
+                  <Input
+                    id="title"
+                    placeholder="예: 인스타그램"
+                    value={newLinkTitle}
+                    onChange={(e) => setNewLinkTitle(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="url">URL</Label>
+                  <Input
+                    id="url"
+                    placeholder="예: https://instagram.com/example"
+                    value={newLinkUrl}
+                    onChange={(e) => setNewLinkUrl(e.target.value)}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" onClick={handleAddLink} disabled={!newLinkTitle || !newLinkUrl}>
+                  추가하기
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
     </div>
