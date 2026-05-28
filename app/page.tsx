@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Link } from "@/data/links"
 import { dummyUser } from "@/data/user"
 import { Card, CardContent } from "@/components/ui/card"
@@ -17,11 +17,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import Image from "next/image"
-import { Plus, Loader2 } from "lucide-react"
+import { Plus, Loader2, Pencil, Trash2 } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { collection, getDocs, addDoc, query, orderBy } from "firebase/firestore"
+import { collection, getDocs, addDoc, query, orderBy, doc, updateDoc, deleteDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 
 const linkSchema = z.object({
@@ -48,25 +48,34 @@ export default function Page() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    const fetchLinks = async () => {
-      try {
-        const q = query(collection(db, "users", "anonymous", "links"), orderBy("createdAt", "desc"))
-        const querySnapshot = await getDocs(q)
-        const fetchedLinks: Link[] = []
-        querySnapshot.forEach((doc) => {
-          fetchedLinks.push({ id: doc.id, ...doc.data() } as Link)
-        })
-        setLinks(fetchedLinks)
-      } catch (error) {
-        console.error("Failed to fetch links:", error)
-        alert("링크를 불러오는데 실패했습니다.")
-      } finally {
-        setIsLoading(false)
-      }
+  const [editingLinkId, setEditingLinkId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState({ title: "", url: "" })
+  const [editError, setEditError] = useState({ title: "", url: "" })
+  const [isUpdating, setIsUpdating] = useState(false)
+
+  const [deletingLink, setDeletingLink] = useState<Link | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  const fetchLinks = useCallback(async () => {
+    try {
+      const q = query(collection(db, "users", "anonymous", "links"), orderBy("createdAt", "desc"))
+      const querySnapshot = await getDocs(q)
+      const fetchedLinks: Link[] = []
+      querySnapshot.forEach((doc) => {
+        fetchedLinks.push({ id: doc.id, ...doc.data() } as Link)
+      })
+      setLinks(fetchedLinks)
+    } catch (error) {
+      console.error("Failed to fetch links:", error)
+      alert("링크를 불러오는데 실패했습니다.")
+    } finally {
+      setIsLoading(false)
     }
-    fetchLinks()
   }, [])
+
+  useEffect(() => {
+    fetchLinks()
+  }, [fetchLinks])
 
   const {
     register,
@@ -116,6 +125,53 @@ export default function Page() {
     }
   }
 
+  const handleUpdate = async (linkId: string) => {
+    const result = linkSchema.safeParse(editForm)
+    if (!result.success) {
+      const fieldErrors = result.error.flatten().fieldErrors
+      setEditError({
+        title: fieldErrors.title?.[0] || "",
+        url: fieldErrors.url?.[0] || "",
+      })
+      return
+    }
+
+    setIsUpdating(true)
+    try {
+      const now = new Date().toISOString()
+      const linkRef = doc(db, "users", "anonymous", "links", linkId)
+      await updateDoc(linkRef, {
+        title: result.data.title,
+        url: result.data.url,
+        updatedAt: now
+      })
+
+      await fetchLinks()
+      setEditingLinkId(null)
+    } catch (error) {
+      console.error("Failed to update link:", error)
+      alert("링크 수정에 실패했습니다. 다시 시도해주세요.")
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deletingLink) return
+    setIsDeleting(true)
+    try {
+      const linkRef = doc(db, "users", "anonymous", "links", deletingLink.id)
+      await deleteDoc(linkRef)
+      setLinks(links.filter(link => link.id !== deletingLink.id))
+      setDeletingLink(null)
+    } catch (error) {
+      console.error("Failed to delete link:", error)
+      alert("링크 삭제에 실패했습니다. 다시 시도해주세요.")
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   return (
     <div className="relative flex min-h-svh flex-col items-center p-6 sm:p-12 overflow-hidden selection:bg-primary selection:text-primary-foreground">
 
@@ -151,36 +207,103 @@ export default function Page() {
               등록된 링크가 없습니다.
             </div>
           ) : (
-            links.map((link) => (
-              <a
-                key={link.id}
-                href={link.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group block w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-xl"
-              >
-                <Card className="w-full overflow-hidden border-muted/30 bg-background/50 backdrop-blur-xl transition-all duration-300 ease-out hover:-translate-y-1 hover:border-primary/30 hover:bg-background/80 hover:shadow-xl hover:shadow-primary/5 dark:bg-muted/10 dark:hover:bg-muted/20">
-                  <CardContent className="relative flex min-h-[72px] items-center p-4">
-                    {/* Favicon */}
-                    <div className="absolute left-4 flex h-11 w-11 items-center justify-center rounded-full bg-background/60 shadow-sm transition-transform duration-300 group-hover:scale-110 group-hover:bg-background dark:bg-background/20 dark:group-hover:bg-background/40">
-                      <Image
-                        src={`https://www.google.com/s2/favicons?domain=${link.url}&sz=128`}
-                        alt={`${link.title} 파비콘`}
-                        width={22}
-                        height={22}
-                        className="h-5 w-5 object-contain"
-                      />
-                    </div>
-                    {/* Title */}
-                    <div className="flex-1 px-14 text-center">
-                      <span className="text-[15px] font-semibold tracking-wide text-foreground/90 transition-colors group-hover:text-foreground">
-                        {link.title}
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </a>
-            ))
+            links.map((link) => {
+              if (editingLinkId === link.id) {
+                return (
+                  <Card key={link.id} className="w-full border-primary/50 bg-background/80 shadow-md">
+                    <CardContent className="flex flex-col gap-3 p-4">
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor={`edit-title-${link.id}`} className={editError.title ? "text-destructive" : ""}>제목</Label>
+                        <Input 
+                          id={`edit-title-${link.id}`}
+                          value={editForm.title} 
+                          onChange={(e) => setEditForm({...editForm, title: e.target.value})} 
+                          className={editError.title ? "border-destructive focus-visible:ring-destructive" : ""}
+                        />
+                        {editError.title && <p className="text-xs font-medium text-destructive">{editError.title}</p>}
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor={`edit-url-${link.id}`} className={editError.url ? "text-destructive" : ""}>URL</Label>
+                        <Input 
+                          id={`edit-url-${link.id}`}
+                          value={editForm.url} 
+                          onChange={(e) => setEditForm({...editForm, url: e.target.value})} 
+                          className={editError.url ? "border-destructive focus-visible:ring-destructive" : ""}
+                        />
+                        {editError.url && <p className="text-xs font-medium text-destructive">{editError.url}</p>}
+                      </div>
+                      <div className="flex justify-end gap-2 mt-2">
+                        <Button variant="outline" size="sm" onClick={() => setEditingLinkId(null)}>취소</Button>
+                        <Button size="sm" onClick={() => handleUpdate(link.id)} disabled={isUpdating}>
+                          {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          저장
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              }
+              
+              return (
+                <div key={link.id} className="group relative block w-full">
+                  <a
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-xl"
+                  >
+                    <Card className="w-full overflow-hidden border-muted/30 bg-background/50 backdrop-blur-xl transition-all duration-300 ease-out hover:-translate-y-1 hover:border-primary/30 hover:bg-background/80 hover:shadow-xl hover:shadow-primary/5 dark:bg-muted/10 dark:hover:bg-muted/20">
+                      <CardContent className="relative flex min-h-[72px] items-center p-4">
+                        {/* Favicon */}
+                        <div className="absolute left-4 flex h-11 w-11 items-center justify-center rounded-full bg-background/60 shadow-sm transition-transform duration-300 group-hover:scale-110 group-hover:bg-background dark:bg-background/20 dark:group-hover:bg-background/40">
+                          <Image
+                            src={`https://www.google.com/s2/favicons?domain=${link.url}&sz=128`}
+                            alt={`${link.title} 파비콘`}
+                            width={22}
+                            height={22}
+                            className="h-5 w-5 object-contain"
+                          />
+                        </div>
+                        {/* Title */}
+                        <div className="flex-1 px-14 text-center pr-24">
+                          <span className="text-[15px] font-semibold tracking-wide text-foreground/90 transition-colors group-hover:text-foreground">
+                            {link.title}
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </a>
+                  
+                  {/* Action Buttons */}
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 flex gap-1 z-10">
+                    <Button 
+                      size="icon" 
+                      variant="ghost" 
+                      className="h-8 w-8 rounded-full bg-background/50 backdrop-blur-sm hover:bg-background/80" 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setEditForm({ title: link.title, url: link.url });
+                        setEditError({ title: "", url: "" });
+                        setEditingLinkId(link.id);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      size="icon" 
+                      variant="ghost" 
+                      className="h-8 w-8 rounded-full bg-background/50 backdrop-blur-sm hover:bg-destructive hover:text-destructive-foreground" 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setDeletingLink(link);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )
+            })
           )}
 
           {/* Add Link Dialog */}
@@ -230,6 +353,36 @@ export default function Page() {
                   </Button>
                 </DialogFooter>
               </form>
+            </DialogContent>
+          </Dialog>
+
+          {/* Delete Confirmation Dialog */}
+          <Dialog open={!!deletingLink} onOpenChange={(open) => !open && setDeletingLink(null)}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>정말 삭제하시겠습니까?</DialogTitle>
+                <DialogDescription>
+                  <span className="font-semibold text-foreground">'{deletingLink?.title}'</span> 링크를 삭제합니다.<br />
+                  이 작업은 되돌릴 수 없습니다.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="mt-4 sm:justify-end gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setDeletingLink(null)}
+                  disabled={isDeleting}
+                >
+                  취소
+                </Button>
+                <Button 
+                  variant="destructive" 
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                >
+                  {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  삭제하기
+                </Button>
+              </DialogFooter>
             </DialogContent>
           </Dialog>
         </div>
