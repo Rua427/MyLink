@@ -11,10 +11,10 @@ export interface User {
 
 export const dummyUser: User = {
   id: "abc123xyz456",
-  email: "jane@gmail.com",
-  username: "jane_doe",
+  email: "ekrua427@gmail.com",
+  username: "dakyeom_kim",
   photoURL: "https://api.dicebear.com/9.x/notionists/svg?seed=Jane",
-  displayName: "Jane Doe",
+  displayName: "Dakyeom kim",
   bio: "프론트엔드 개발자입니다.",
   createdAt: "2026-05-25T17:10:24Z",
   updatedAt: "2026-05-25T17:10:24Z",

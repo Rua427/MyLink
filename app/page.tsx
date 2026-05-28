@@ -67,7 +67,6 @@ export default function Page() {
       setLinks(fetchedLinks)
     } catch (error) {
       console.error("Failed to fetch links:", error)
-      alert("링크를 불러오는데 실패했습니다.")
     } finally {
       setIsLoading(false)
     }
@@ -111,10 +110,8 @@ export default function Page() {
       setLinks([newLink, ...links])
       reset()
       setIsDialogOpen(false)
-      alert("링크가 성공적으로 추가되었습니다.")
     } catch (error) {
       console.error("Failed to add link:", error)
-      alert("링크 추가에 실패했습니다. 다시 시도해주세요.")
     }
   }
 
@@ -150,7 +147,6 @@ export default function Page() {
       setEditingLinkId(null)
     } catch (error) {
       console.error("Failed to update link:", error)
-      alert("링크 수정에 실패했습니다. 다시 시도해주세요.")
     } finally {
       setIsUpdating(false)
     }
@@ -166,7 +162,6 @@ export default function Page() {
       setDeletingLink(null)
     } catch (error) {
       console.error("Failed to delete link:", error)
-      alert("링크 삭제에 실패했습니다. 다시 시도해주세요.")
     } finally {
       setIsDeleting(false)
     }
